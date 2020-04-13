@@ -23,6 +23,7 @@ import (
 	"github.com/qri-io/ioes"
 	"github.com/qri-io/qfs/qipfs"
 	"github.com/qri-io/qri/config"
+	"github.com/qri-io/qri/event"
 	p2ptest "github.com/qri-io/qri/p2p/test"
 	"github.com/qri-io/qri/repo"
 )
@@ -60,6 +61,9 @@ type QriNode struct {
 	// request/response pattern
 	handlers map[MsgType]HandlerFunc
 
+	// publish events coming from p2p land
+	pub event.Publisher
+
 	// msgState keeps a "scratch pad" of message IDS & timeouts
 	msgState *sync.Map
 	// msgChan provides a channel of received messages for others to tune into
@@ -81,14 +85,14 @@ var _ p2ptest.NodeMakerFunc = NewTestableQriNode
 
 // NewTestableQriNode creates a new node, as a TestablePeerNode, usable by testing utilities.
 func NewTestableQriNode(r repo.Repo, p2pconf *config.P2P) (p2ptest.TestablePeerNode, error) {
-	return NewQriNode(r, p2pconf)
+	return NewQriNode(r, p2pconf, &event.NilPublisher{})
 }
 
 // NewQriNode creates a new node from a configuration. To get a fully connected
 // node that's searching for peers call:
 // n, _ := NewQriNode(r, cfg)
 // n.GoOnline()
-func NewQriNode(r repo.Repo, p2pconf *config.P2P) (node *QriNode, err error) {
+func NewQriNode(r repo.Repo, p2pconf *config.P2P, pub event.Publisher) (node *QriNode, err error) {
 	pid, err := p2pconf.DecodePeerID()
 	if err != nil {
 		return nil, fmt.Errorf("error decoding peer id: %s", err.Error())
@@ -100,6 +104,7 @@ func NewQriNode(r repo.Repo, p2pconf *config.P2P) (node *QriNode, err error) {
 		Repo:     r,
 		msgState: &sync.Map{},
 		msgChan:  make(chan Message),
+		pub:      pub,
 		// Make sure we always have proper IOStreams, this can be set
 		// later
 		LocalStreams: ioes.NewDiscardIOStreams(),
@@ -178,6 +183,7 @@ func (n *QriNode) GoOnline(ctx context.Context) (err error) {
 
 	n.Online = true
 	go n.echoMessages()
+	n.pub.Publish(event.ETP2PGoneOnline, n.EncapsulatedAddresses())
 
 	return n.startOnlineServices(ctx)
 }
@@ -201,6 +207,13 @@ func (n *QriNode) startOnlineServices(ctx context.Context) error {
 	}()
 
 	return n.StartDiscovery(bsPeers)
+}
+
+// GoOffline shuts down this peer
+func (n *QriNode) GoOffline() error {
+	err := n.Host().Close()
+	n.pub.Publish(event.ETP2PGoneOffline, nil)
+	return err
 }
 
 // ReceiveMessages adds a listener for newly received messages

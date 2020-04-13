@@ -10,6 +10,7 @@ import (
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/qri-io/qri/config"
+	"github.com/qri-io/qri/event"
 	"github.com/qri-io/qri/repo/profile"
 )
 
@@ -65,10 +66,13 @@ func (n *QriNode) UpgradeToQriConnection(pinfo pstore.PeerInfo) error {
 	n.host.ConnManager().TagPeer(pid, qriSupportKey, qriSupportValue)
 
 	ctx := context.TODO()
-	if _, err := n.RequestProfile(ctx, pid); err != nil {
+	pro, err := n.RequestProfile(ctx, pid)
+	if err != nil {
 		log.Debug(err.Error())
 		return err
 	}
+
+	n.pub.Publish(event.ETP2PQriPeerConnected, pro)
 
 	go func() {
 		ps, err := n.RequestQriPeers(ctx, pid)

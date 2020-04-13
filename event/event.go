@@ -97,9 +97,9 @@ func NewBus(ctx context.Context) Bus {
 
 // Publish sends an event to the bus
 func (b *bus) Publish(topic Topic, data interface{}) {
+	log.Debugf("Publish: %s", topic)
 	b.lk.RLock()
 	defer b.lk.RUnlock()
-	log.Debugf("Publish: %s", topic)
 
 	event := Event{Payload: data, Topic: topic}
 
