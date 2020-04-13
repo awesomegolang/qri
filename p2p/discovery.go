@@ -2,16 +2,15 @@ package p2p
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	pstore "github.com/libp2p/go-libp2p-peerstore"
 	discovery "github.com/libp2p/go-libp2p/p2p/discovery"
 )
 
-// StartDiscovery initiates peer discovery, allocating a discovery
-// services if one doesn't exist, then registering to be notified on peer discovery
-func (n *QriNode) StartDiscovery(bootstrapPeers chan pstore.PeerInfo) error {
+// startDiscovery initiates local peer discovery, allocating a discovery service
+// if one doesn't exist, then registering to be notified on peer discovery
+func (n *QriNode) startDiscovery() error {
 	if n.Discovery == nil {
 		service, err := discovery.NewMdnsService(context.Background(), n.host, time.Second*5, QriServiceTag)
 		if err != nil {
@@ -22,14 +21,6 @@ func (n *QriNode) StartDiscovery(bootstrapPeers chan pstore.PeerInfo) error {
 
 	// Registering will call n.HandlePeerFound when peers are discovered
 	n.Discovery.RegisterNotifee(n)
-
-	// Check our existing peerstore for any potential friends
-	go n.DiscoverPeerstoreQriPeers(n.host.Peerstore())
-	// Boostrap off of default addresses
-	go n.Bootstrap(n.cfg.QriBootstrapAddrs, bootstrapPeers)
-	// Bootstrap to IPFS network if this node is using an IPFS fs
-	go n.BootstrapIPFS()
-
 	return nil
 }
 
@@ -51,7 +42,7 @@ func (n *QriNode) DiscoverPeerstoreQriPeers(store pstore.Peerstore) {
 			if supports, err := n.supportsQriProtocol(pid); err == nil && supports {
 				// TODO - slow this down plz
 				if err := n.UpgradeToQriConnection(store.PeerInfo(pid)); err != nil {
-					fmt.Println(err.Error())
+					log.Debug(err.Error())
 				}
 			}
 		}
