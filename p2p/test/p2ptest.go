@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/ipfs/go-cid"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
@@ -27,7 +28,7 @@ type TestablePeerNode interface {
 	Host() host.Host
 	SimplePeerInfo() pstore.PeerInfo
 	UpgradeToQriConnection(pstore.PeerInfo) error
-	GoOnline(ctx context.Context) error
+	GoOnline(context.Context) error
 }
 
 // NodeMakerFunc is a function that constructs a Node from a Repo and options.
@@ -188,6 +189,7 @@ func ConnectQriNodes(ctx context.Context, nodes []TestablePeerNode) error {
 		}
 	}
 	wgConnect.Wait()
+	time.Sleep(time.Millisecond * 300)
 	// previously, we had UpgradeToQriConnection running in separate threads
 	// much like we did with the basic connection
 	// however, UpgradeToQriConnection asks for and sends profile information
