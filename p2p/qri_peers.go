@@ -8,7 +8,6 @@ import (
 	"time"
 
 	peer "github.com/libp2p/go-libp2p-core/peer"
-	pstore "github.com/libp2p/go-libp2p-peerstore"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/qri-io/qri/config"
 	"github.com/qri-io/qri/event"
@@ -25,13 +24,12 @@ type QriPeer struct {
 	NetworkAddrs []string
 }
 
-// UpgradeToQriConnection attempts to open a Qri protocol connection to a peer
+// upgradeToQriConnection attempts to open a Qri protocol connection to a peer
 // it records whether the peer supports Qri in the host Peerstore,
 // returns ErrQriProtocolNotSupported if the connection cannot be upgraded,
 // and sets a priority in the host Connection Manager if the connection is upgraded
-func (n *QriNode) UpgradeToQriConnection(pinfo pstore.PeerInfo) error {
+func (n *QriNode) upgradeToQriConnection(pid peer.ID) error {
 	// bail early if we have seen this peer before
-	pid := pinfo.ID
 	log.Debugf("%s, attempting to upgrading %s to qri connection", n.ID, pid)
 	if _support, err := n.host.Peerstore().Get(pid, qriSupportKey); err == nil {
 		support, ok := _support.(bool)
