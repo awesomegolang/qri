@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/rpc"
 	"os"
@@ -9,7 +10,9 @@ import (
 	"sync"
 
 	"github.com/qri-io/ioes"
+	qipfs "github.com/qri-io/qfs/cafs/ipfs"
 	"github.com/qri-io/qri/config"
+	qerr "github.com/qri-io/qri/errors"
 	"github.com/qri-io/qri/lib"
 	"github.com/qri-io/qri/p2p"
 	"github.com/qri-io/qri/repo/gen"
@@ -30,7 +33,12 @@ Feedback, questions, bug reports, and contributions are welcome!
 https://github.com/qri-io/qri/issues`,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			shouldColorOutput := false
-			cfg := opt.Instance().Config()
+			inst := opt.Instance()
+			if inst == nil {
+				opt.PrintErr("could not generate an instance from the given qri and ipfs paths, cannot finish command")
+				panic(1)
+			}
+			cfg := inst.Config()
 			if cfg != nil && cfg.CLI != nil {
 				shouldColorOutput = cfg.CLI.ColorizeOutput
 			}
@@ -153,14 +161,32 @@ func (o *QriOptions) Init() (err error) {
 		o.inst, err = lib.NewInstance(o.ctx, o.RepoPath, opts...)
 		log.Debugf("running cmd %q", os.Args)
 	}
-	// o.initialized.Do(initBody)
 	initBody()
-	return
+	if errors.Is(err, qipfs.ErrNeedMigration) {
+		err = nil
+		msg := `
+Your IPFS repo needs updating before qri can run this command. 
+Run migration now?`
+		if !confirm(o.Out, o.In, msg, false) {
+			return qerr.New(qipfs.ErrNeedMigration, `command cancelled, requires migration.`)
+		}
+
+		if err = qipfs.Migrate(); err != nil {
+			return err
+		}
+		if err = o.Init(); err != nil {
+			return err
+		}
+	} else {
+		return err
+	}
+	return err
 }
 
 // Instance returns the instance this options is using
 func (o *QriOptions) Instance() *lib.Instance {
 	if err := o.Init(); err != nil {
+		o.PrintErr(err.Error())
 		return nil
 	}
 	return o.inst
